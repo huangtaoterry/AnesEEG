@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>麻醉学测验（解析 + 统计）</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+body { font-family: Arial, sans-serif; background: #f0f2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+#app { background: white; padding: 20px; border-radius: 20px; width: 500px; text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.2); overflow: hidden; }
+h2 { margin-bottom: 20px; }
+.progress { height: 8px; background: #e9ecef; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+.progress-bar { height: 100%; background: #4caf50; transition: width 0.5s ease; }
+.option { display: block; margin: 10px 0; padding: 12px; border-radius: 12px; background: #f8f9fa; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s ease, background 0.2s; }
+.option:hover { background: #e9ecef; transform: scale(1.02); }
+.correct { border-color: #28a745; background: #d4edda; }
+.wrong { border-color: #dc3545; background: #f8d7da; }
+.score { font-size: 20px; margin-top: 20px; }
+.explanation { margin-top: 10px; font-size: 14px; color: #555; background: #f1f3f5; padding: 10px; border-radius: 8px; }
+button { margin-top: 15px; padding: 10px 20px; border: none; border-radius: 8px; background: #007bff; color: white; cursor: pointer; transition: transform 0.15s ease; }
+button:hover { background: #0056b3; transform: scale(1.05); }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.5s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.chart { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; height: 200px; border-left: 1px solid #333; border-bottom: 1px solid #333; padding: 0 10px; }
+.bar { width: 20px; margin: 0 5px; border-radius: 5px; text-align: center; color: white; font-size: 12px; }
+.bar.correct { background: #28a745; }
+.bar.wrong { background: #dc3545; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div v-if="finished">
+    <h2>测验完成 🎉</h2>
+    <p class="score">你的得分：{{ score }} / {{ questions.length }}</p>
+    <div class="chart">
+      <div v-for="(item,i) in history" :key="i" class="bar" 
+           :class="{correct:item.correct, wrong:!item.correct}" 
+           :style="{height: item.correct ? '100%' : '50%'}"
+           :title="item.correct ? '答对' : '答错'">
+        {{ i+1 }}
+      </div>
+    </div>
+    <button @click="restart">重新开始</button>
+  </div>
+  <div v-else>
+    <h2>题目 {{ currentIndex + 1 }} / {{ questions.length }}</h2>
+    <div class="progress">
+      <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+    </div>
+    <transition name="fade" mode="out-in">
+      <div :key="currentIndex">
+        <p>{{ currentQuestion.text }}</p>
+        <div v-for="(opt, i) in currentQuestion.options" :key="i"
+             class="option"
+             :class="{ correct: selectedIndex === i && i === currentQuestion.answer,
+                       wrong: selectedIndex === i && i !== currentQuestion.answer }"
+             @click="selectAnswer(i)">
+          {{ opt }}
+        </div>
+        <div v-if="showExplanation" class="explanation">
+          <strong>解析：</strong> {{ currentQuestion.explanation }}
+        </div>
+      </div>
+    </transition>
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      questions: [
+        { text: "麻醉诱导期最常见的血流动力学变化是？", options: ["高血压","低血压","心动过速","心动过缓"], answer:1, explanation:"麻醉诱导期常用药物可导致血管扩张，血压下降。" },
+        { text: "全麻中最常用的肌松药是？", options: ["维库溴铵","阿曲库铵","琥珀胆碱","依托咪酯"], answer:0, explanation:"维库溴铵作用时间适中，是常用肌松药。" },
+        { text: "快速序贯诱导中首选的肌松药是？", options:["琥珀胆碱","维库溴铵","阿曲库铵","帕库溴铵"], answer:0, explanation:"琥珀胆碱起效快，适用于快速插管。" },
+        { text: "局麻药利多卡因的最大安全剂量（无肾上腺素）为？", options:["3 mg/kg","5 mg/kg","7 mg/kg","10 mg/kg"], answer:0, explanation:"利多卡因最大剂量通常为3 mg/kg。" },
+        { text: "常用吸入麻醉剂中，血/气分配系数最小的是？", options:["异氟醚","七氟醚","笑气","丙泊酚"], answer:2, explanation:"笑气血/气分配系数最低，起效快。" },
+        { text: "术中低血压最常见的原因是？", options:["出血","麻醉药引起","心律失常","低体温"], answer:1, explanation:"麻醉药可扩张血管、抑制心功能。" },
+        { text: "麻醉诱导常用静脉麻醉药是？", options:["异氟醚","七氟醚","丙泊酚","氯胺酮"], answer:2, explanation:"丙泊酚起效快，可用于诱导。" },
+        { text: "麻醉中维持气道通畅的金标准是？", options:["面罩通气","喉罩","气管插管","鼻导管"], answer:2, explanation:"气管插管是全麻维持气道通畅的金标准。" },
+        { text: "吸入麻醉药引起呼吸抑制的机制主要是？", options:["中枢神经抑制","呼吸肌麻痹","气道阻塞","肺顺应性降低"], answer:0, explanation:"吸入麻醉药通过抑制呼吸中枢引起呼吸抑制。" },
+        { text: "局麻药过量中毒最典型的表现是？", options:["恶心呕吐","中枢兴奋、抽搐","呼吸浅快","血压升高"], answer:1, explanation:"局麻药血浓度过高可导致抽搐。" }
+      ],
+      currentIndex:0,
+      selectedIndex:null,
+      score:0,
+      finished:false,
+      showExplanation:false,
+      history:[],
+      audioCorrect:new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"),
+      audioWrong:new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
+    };
+  },
+  computed: {
+    currentQuestion(){ return this.questions[this.currentIndex]; },
+    progress(){ return ((this.currentIndex)/this.questions.length)*100; }
+  },
+  methods:{
+    selectAnswer(i){
+      if(this.selectedIndex!==null) return;
+      this.selectedIndex=i;
+      let correct = i===this.currentQuestion.answer;
+      this.history.push({question:this.currentQuestion.text, correct});
+      if(correct){ this.score++; this.audioCorrect.currentTime=0; this.audioCorrect.play();}
+      else{ this.audioWrong.currentTime=0; this.audioWrong.play();}
+      this.showExplanation=true;
+      setTimeout(()=>{this.nextQuestion();},100);
+    },
+    nextQuestion(){
+      this.selectedIndex=null;
+      this.showExplanation=false;
+      if(this.currentIndex<this.questions.length-1){this.currentIndex++;}
+      else{this.finished=true;}
+    },
+    restart(){
+      this.currentIndex=0;
+      this.score=0;
+      this.finished=false;
+      this.selectedIndex=null;
+      this.showExplanation=false;
+      this.history=[];
+    }
+  }
+}).mount("#app");
+</script>
+</body>
+</html>
